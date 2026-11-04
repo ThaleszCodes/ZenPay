@@ -19,12 +19,28 @@ async function syncOrder(o:any,force=false){
   if(!force&&o.checked_at&&Date.now()-Date.parse(o.checked_at)<6000)return o;
   await sql('UPDATE zenpay_orders SET checked_at=now() WHERE id=$1 AND provider_id IS NULL',[o.id]);
   const key=await decrypt(o.credential_encrypted);
-  const match=(rows:unknown)=>Array.isArray(rows)?rows.filter(t=>t?.reference_id===o.id&&t.amount===o.amount&&t.currency_code==='BRL'&&t.payment_method_type==='pix'&&typeof t.id==='string'):[];
-  let matches=match(await pagg(key,o.environment,'/transactions?per_page=50&search='+encodeURIComponent(o.id)));
-  if(!matches.length)matches=match(await pagg(key,o.environment,'/transactions?per_page=50'));
+  const listed=await pagg(key,o.environment,'/transactions?per_page=50');
+  const created=Date.parse(o.created_at);
+  const candidates=Array.isArray(listed)?listed.filter(t=>
+   typeof t.id==='string' && t.amount===o.amount && t.currency_code==='BRL' &&
+   t.payment_method_type==='pix' && Math.abs(Date.parse(t.created_at)-created)<300000
+  ).slice(0,8):[];
+  let matches=candidates.filter(t=>t.pix?.reference_id===o.id);
+  if(!matches.length){
+   const details=await Promise.allSettled(candidates.map(t=>pagg(key,o.environment,'/pix/'+encodeURIComponent(t.id))));
+   matches=details.flatMap((result,index)=>{
+    if(result.status!=='fulfilled')return [];
+    const tx=result.value?.transaction;
+    const pix=result.value?.pix;
+    return tx?.id===candidates[index].id && (tx.reference_id ?? pix?.reference_id)===o.id &&
+     (pix?.value==null || pix.value===o.amount)?[{id:tx.id,pix}]:[];
+   });
+  }
   if(matches.length!==1)return o;
-  const [updated]=await sql("UPDATE zenpay_orders SET provider_id=$2,status='pending' WHERE id=$1 AND provider_id IS NULL RETURNING *",[o.id,matches[0].id]);
+  const match=matches[0];
+  const [updated]=await sql("UPDATE zenpay_orders SET provider_id=$2,status='pending',pix_code=COALESCE($3,pix_code),pix_qr=COALESCE($4,pix_qr),expires_at=COALESCE($5,expires_at) WHERE id=$1 AND provider_id IS NULL RETURNING *",[o.id,match.id,match.pix?.code||null,match.pix?.qr_code||match.pix?.qrcode||null,match.pix?.expiration_date||null]);
   if(!updated)return o;
+  if(updated.pix_code||updated.pix_qr)return updated;
   o=updated;
   force=true;
  }
