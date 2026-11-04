@@ -12,3 +12,9 @@ CREATE INDEX IF NOT EXISTS zenpay_orders_seller ON zenpay_orders(seller_id,creat
 CREATE TABLE IF NOT EXISTS zenpay_events (id text PRIMARY KEY, order_id uuid NOT NULL REFERENCES zenpay_orders(id), created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS zenpay_withdrawals (id uuid PRIMARY KEY, seller_id text NOT NULL REFERENCES zenpay_sellers(id), amount integer NOT NULL CHECK(amount>0), status text NOT NULL DEFAULT 'requesting', result jsonb, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS zenpay_rate_limits (key text PRIMARY KEY, count integer NOT NULL DEFAULT 1, expires_at timestamptz NOT NULL);
+
+ALTER TABLE zenpay_sellers
+  ADD COLUMN IF NOT EXISTS webhook_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  ADD COLUMN IF NOT EXISTS webhook_secret_encrypted text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS zenpay_sellers_webhook_id_idx ON zenpay_sellers(webhook_id);

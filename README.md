@@ -44,3 +44,7 @@ Nenhuma chave PAGGPAY global é necessária. A hospedagem fornece os headers aut
 - `node tests/integration.mjs` aguarda JSON seguro no stdin contendo DATABASE_URL de QA e ENCRYPTION_KEY. Testa rotas e SQL real no banco de QA. Somente o provedor financeiro é simulado no limite HTTP; não movimenta dinheiro.
 
 A aprovação de pagamento real e saque real depende de credencial individual, permissões, onboarding, limites e tarifas da conta PAGGPAY. Os limites mínimos não são assumidos pelo app. Testar uma cobrança baixa em sandbox e depois em produção antes de divulgar a oferta.
+
+## Webhook por vendedor
+
+Em Configurações, copie a URL do webhook, cadastre-a na PAGGPAY no mesmo ambiente da chave e assine `transaction.succeeded`. Salve o segredo de assinatura junto da integração. A ZenPay valida a assinatura e consulta a transação na PAGGPAY antes de liberar a entrega. Sem segredo manual, a integração usa o callback assinado por cobrança. Para atualizar uma instalação existente, aplique `db/migrations/001_seller_webhooks.sql` antes do deploy.

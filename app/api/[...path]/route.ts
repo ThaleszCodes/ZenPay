@@ -16,7 +16,7 @@ function publicOrder(o:any){return {id:o.id,status:o.status,amount:o.amount,prod
 async function syncOrder(o:any,force=false){if(!o.provider_id)return o;if(!force&&o.checked_at&&Date.now()-Date.parse(o.checked_at)<6000)return o;const data=await pagg(await decrypt(o.credential_encrypted),o.environment,'/pix/'+encodeURIComponent(o.provider_id));const tid=data?.transaction?.id;if(tid!==o.provider_id)fail('Pagamento não corresponde ao pedido.',502);if(data.pix?.value!=null&&Number(data.pix.value)!==o.amount)fail('Valor do pagamento não corresponde ao pedido.',502);const status=paymentStatus(data);const [updated]=await sql(`UPDATE zenpay_orders SET status=$2,paid_at=CASE WHEN $2='paid' THEN COALESCE(paid_at,now()) ELSE paid_at END,checked_at=now() WHERE id=$1 RETURNING *`,[o.id,status]);return updated;}
 async function handle(req:Request){
  const url=new URL(req.url);const p=url.pathname.split('/').filter(Boolean).slice(1);const action=p[0], id=p[1];
- if(!['GET','HEAD'].includes(req.method)&&action!=='webhooks'){const origin=req.headers.get('Origin');if(origin&&origin!==url.origin)fail('Origem não permitida.',403);}
+ if(!['GET','HEAD'].includes(req.method)&&!['webhooks','seller-webhooks'].includes(action)){const origin=req.headers.get('Origin');if(origin&&origin!==url.origin)fail('Origem não permitida.',403);}
  if(Number(req.headers.get('Content-Length')||0)>12500000)fail('Arquivo muito grande. Use um link de entrega.',413);
  const body=async()=>{try{return await req.json();}catch{fail('Dados inválidos.');}};
  if(action==='public'&&req.method==='GET'){
@@ -26,10 +26,10 @@ async function handle(req:Request){
   const b=z.object({product_id:uuid,request_key:uuid,token:z.string().regex(/^[A-Za-z0-9_-]{43}$/),name:z.string().trim().min(2).max(120),email:z.string().trim().email().max(254),phone:z.string().max(25).default('')}).parse(await body());
   const [existing]=await sql('SELECT * FROM zenpay_orders WHERE request_key=$1',[b.request_key]);if(existing){if(existing.access_hash!==await hash(b.token))fail('Pedido inválido.',403);return response(publicOrder(existing));}
   const ip=req.headers.get('cf-connecting-ip')||req.headers.get('x-forwarded-for')?.split(',')[0]||'unknown';await rateLimit('checkout:'+await hash(ip),20,600);await rateLimit('product:'+b.product_id,100,600);
-  const [p]=await sql(`SELECT p.*,s.api_key_encrypted,s.environment FROM zenpay_products p JOIN zenpay_sellers s ON s.id=p.seller_id WHERE p.id=$1 AND p.active=true`,[b.product_id]);if(!p)fail('Produto indisponível.',404);if(!p.api_key_encrypted)fail('O vendedor ainda não conectou os pagamentos.');
+  const [p]=await sql(`SELECT p.*,s.api_key_encrypted,s.webhook_secret_encrypted,s.environment FROM zenpay_products p JOIN zenpay_sellers s ON s.id=p.seller_id WHERE p.id=$1 AND p.active=true`,[b.product_id]);if(!p)fail('Produto indisponível.',404);if(!p.api_key_encrypted)fail('O vendedor ainda não conectou os pagamentos.');
   const oid=crypto.randomUUID();const [o]=await sql(`INSERT INTO zenpay_orders(id,product_id,seller_id,request_key,access_hash,customer_name,customer_email,customer_phone,amount,product_name,delivery_url,delivery_text,file_name,file_data,environment,credential_encrypted) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT(request_key) DO NOTHING RETURNING *`,[oid,p.id,p.seller_id,b.request_key,await hash(b.token),b.name,b.email.toLowerCase(),b.phone,p.price,p.name,p.delivery_url,p.delivery_text,p.file_name,p.file_data,p.environment,p.api_key_encrypted]);
   if(!o){const [prior]=await sql('SELECT * FROM zenpay_orders WHERE request_key=$1',[b.request_key]);if(prior?.access_hash!==await hash(b.token))fail('Pedido inválido.',403);return response(publicOrder(prior));}
-  try{const d=await pagg(await decrypt(p.api_key_encrypted),p.environment,'/pix','POST',{value:p.price,reference_id:oid,payer_name:b.name,payer_email:b.email,payer_phone:b.phone,description:p.name,payer_pays_fee:false,webhook_url:url.origin+'/api/webhooks/'+oid},{'X-Paggpay-Webhook-Secret':await callbackSecret(oid)});
+  try{const d=await pagg(await decrypt(p.api_key_encrypted),p.environment,'/pix','POST',{value:p.price,reference_id:oid,payer_name:b.name,payer_email:b.email,payer_phone:b.phone,description:p.name,payer_pays_fee:false,...(!p.webhook_secret_encrypted?{webhook_url:url.origin+'/api/webhooks/'+oid}:{})},p.webhook_secret_encrypted?{}:{'X-Paggpay-Webhook-Secret':await callbackSecret(oid)});
    if(!d?.transaction?.id||!d?.pix?.code)throw new PaymentError('A PAGGPAY não retornou o código Pix.',502);
    const [updated]=await sql(`UPDATE zenpay_orders SET provider_id=$2,status='pending',pix_code=$3,pix_qr=$4,expires_at=$5 WHERE id=$1 RETURNING *`,[oid,d.transaction.id,d.pix.code,d.pix.qrcode||null,d.pix.expiration_date||null]);return response(publicOrder(updated),201);
   }catch(e){await sql(`UPDATE zenpay_orders SET status=$2 WHERE id=$1`,[oid,(e as any).status===503?'verification_required':'creation_failed']);throw e;}
@@ -39,19 +39,42 @@ async function handle(req:Request){
   let o=await orderAuth(id,req);o=await syncOrder(o,true);if(o.status!=='paid')fail('A entrega será liberada após a confirmação do pagamento.',403);
   await sql('UPDATE zenpay_orders SET delivered_at=COALESCE(delivered_at,now()) WHERE id=$1',[id]);return response({name:o.product_name,delivery_url:o.delivery_url,delivery_text:o.delivery_text,file_name:o.file_name,file_data:o.file_data});
  }
+ if(action==='seller-webhooks'&&req.method==='POST'){
+  uuid.parse(id);
+  const [owner]=await sql('SELECT id,webhook_secret_encrypted FROM zenpay_sellers WHERE webhook_id=$1',[id]);
+  const raw=await req.text();
+  if(raw.length>100000)fail('Evento inválido.',413);
+  if(!owner?.webhook_secret_encrypted||!await verifyWebhook(raw,req.headers.get('X-Paggpay-Webhook-Signature')||'',id,await decrypt(owner.webhook_secret_encrypted)))fail('Assinatura inválida.',401);
+  let event:any;
+  try{event=JSON.parse(raw);}catch{fail('Evento inválido.');}
+  if(typeof event?.id!=='string'||!event.id||event.id.length>120)fail('Evento inválido.');
+  const transactionId=event.data?.transaction?.id ?? event.data?.transaction_id ?? event.data?.id;
+  const reference=uuid.safeParse(event.data?.transaction?.reference_id ?? event.data?.reference_id);
+  const providerId=typeof transactionId==='string'&&transactionId.length<=200?transactionId:null;
+  if(!reference.success&&!providerId)return response({received:true});
+  const [order]=await sql('SELECT * FROM zenpay_orders WHERE seller_id=$1 AND (id=$2::uuid OR provider_id=$3) ORDER BY (provider_id=$3) DESC NULLS LAST LIMIT 1',[owner.id,reference.success?reference.data:null,providerId]);
+  if(!order)return response({received:true});
+  if(!order.provider_id)fail('Pedido ainda em processamento.',409);
+  const [seen]=await sql('SELECT id FROM zenpay_events WHERE id=$1 AND order_id=$2',[event.id,order.id]);
+  if(seen)return response({received:true});
+  await syncOrder(order,true);
+  await sql('INSERT INTO zenpay_events(id,order_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[event.id,order.id]);
+  return response({received:true});
+ }
  if(action==='webhooks'&&req.method==='POST'){
   uuid.parse(id);const raw=await req.text();if(raw.length>100000)fail('Evento inválido.',413);if(!await verifyWebhook(raw,req.headers.get('X-Paggpay-Webhook-Signature')||'',id))fail('Assinatura inválida.',401);
   let event:any;try{event=JSON.parse(raw);}catch{fail('Evento inválido.');}if(typeof event.id!=='string'||event.id.length>120)fail('Evento inválido.');const [seen]=await sql('SELECT id FROM zenpay_events WHERE id=$1',[event.id]);if(seen)return response({received:true});const [o]=await sql('SELECT * FROM zenpay_orders WHERE id=$1',[id]);if(!o)fail('Pedido não encontrado.',404);if(!o.provider_id)fail('Pedido ainda em processamento.',409);await syncOrder(o,true);await sql('INSERT INTO zenpay_events(id,order_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[event.id,id]);return response({received:true});
  }
  const s=await seller();
- if(action==='me'&&req.method==='GET')return response({id:s.id,name:s.name,email:s.email,store_name:s.store_name,whatsapp:s.whatsapp,connected:!!s.api_key_encrypted,api_key_hint:s.api_key_hint,environment:s.environment});
+ if(action==='me'&&req.method==='GET')return response({id:s.id,name:s.name,email:s.email,store_name:s.store_name,whatsapp:s.whatsapp,connected:!!s.api_key_encrypted,api_key_hint:s.api_key_hint,webhook_configured:!!s.webhook_secret_encrypted,webhook_url:url.origin+'/api/seller-webhooks/'+s.webhook_id,environment:s.environment});
  if(action==='settings'&&req.method==='PUT'){
-  const b=z.object({store_name:z.string().trim().min(2).max(100),whatsapp:z.string().regex(/^\d{10,15}$/,'Informe o WhatsApp com DDI, apenas números.'),environment:z.enum(['production','sandbox']),api_key:z.string().max(500).optional(),disconnect:z.boolean().optional()}).parse(await body());
+  const b=z.object({store_name:z.string().trim().min(2).max(100),whatsapp:z.string().regex(/^\d{10,15}$/,'Informe o WhatsApp com DDI, apenas números.'),environment:z.enum(['production','sandbox']),api_key:z.string().max(500).optional(),webhook_secret:z.string().trim().max(500).refine(value=>!value||value.length>=16,'Informe o segredo de assinatura da PAGGPAY.').optional(),disconnect:z.boolean().optional()}).parse(await body());
   let encrypted=s.api_key_encrypted,hint=s.api_key_hint;
   if(b.api_key?.trim()){const k=b.api_key.trim();await rateLimit('key:'+s.id,10,600);await pagg(k,b.environment,'/transactions?per_page=1');encrypted=await encrypt(k);hint=k.slice(-4);}
   else if(b.environment!==s.environment&&!b.disconnect)fail('Informe a chave do novo ambiente para mudar entre produção e sandbox.');
+  const webhookSecret=b.disconnect?null:b.webhook_secret?await encrypt(b.webhook_secret):b.environment===s.environment?s.webhook_secret_encrypted:null;
   if(b.disconnect){encrypted=null;hint=null;}
-  await sql('UPDATE zenpay_sellers SET store_name=$2,whatsapp=$3,environment=$4,api_key_encrypted=$5,api_key_hint=$6 WHERE id=$1',[s.id,b.store_name,b.whatsapp,b.environment,encrypted,hint]);return response({saved:true});
+  await sql('UPDATE zenpay_sellers SET store_name=$2,whatsapp=$3,environment=$4,api_key_encrypted=$5,api_key_hint=$6,webhook_secret_encrypted=$7 WHERE id=$1',[s.id,b.store_name,b.whatsapp,b.environment,encrypted,hint,webhookSecret]);return response({saved:true});
  }
  if(action==='products'){
   if(req.method==='GET')return response(await sql('SELECT id,name,description,price,cover_url,delivery_url,delivery_text,file_name,active,created_at FROM zenpay_products WHERE seller_id=$1 ORDER BY created_at DESC',[s.id]));
