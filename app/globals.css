@@ -17,3 +17,13 @@
 .neon-login { display: grid; gap: .75rem; max-width: 24rem; margin: 1rem 0; }
 .neon-login label { display: grid; gap: .25rem; }
 .neon-login input { width: 100%; }
+
+@media (max-width:620px) {
+  .dashboard-shell { background:#f5f5f9; }
+  .dashboard-shell .sidebar { display:none; }
+  .dashboard-shell .topbar { display:none; }
+  .dashboard-shell .main-content {
+    padding:0 clamp(18px, 6.15vw, 30px) calc(86px + env(safe-area-inset-bottom, 0px));
+  }
+  .dashboard-home .dashboard-existing,.dashboard-more .dashboard-existing { display:none; }
+}
