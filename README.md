@@ -48,3 +48,12 @@ A aprovação de pagamento real e saque real depende de credencial individual, p
 ## Webhook por vendedor
 
 Em Configurações, copie a URL do webhook, cadastre-a na PAGGPAY no mesmo ambiente da chave e assine `transaction.succeeded`. Salve o segredo de assinatura junto da integração. A ZenPay valida a assinatura e consulta a transação na PAGGPAY antes de liberar a entrega. Sem segredo manual, a integração usa o callback assinado por cobrança. Para atualizar uma instalação existente, aplique `db/migrations/001_seller_webhooks.sql` antes do deploy.
+
+### Deploy na Vercel
+
+Use o preset Next.js e deixe Output Directory sem override. O `vercel.json` seleciona o build nativo do Next.js.
+Configure `DATABASE_URL`, a `ENCRYPTION_KEY` existente e `ZENPAY_ORIGIN` com o domínio público HTTPS.
+Crie um cliente OAuth do tipo aplicativo web no Google Cloud. Autorize o redirecionamento
+`https://SEU-DOMINIO/api/auth/callback` e configure `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`.
+Defina `ZENPAY_SESSION_SECRET` com um segredo aleatório de pelo menos 32 caracteres.
+O vendedor deve entrar com o mesmo e-mail verificado para recuperar uma loja existente.

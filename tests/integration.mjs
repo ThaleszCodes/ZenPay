@@ -10,7 +10,7 @@ writeFileSync(new URL('route.mjs',dir),ts.transpileModule(route,{compilerOptions
 console.log('Ready for test configuration on stdin (input hidden).');
 if(process.stdin.isTTY)process.stdin.setRawMode(true);
 let input='';const config=await new Promise(resolve=>{process.stdin.on('data',function onData(c){input+=c.toString();if(input.includes('\n')||input.includes('\r')){process.stdin.off('data',onData);if(process.stdin.isTTY)process.stdin.setRawMode(false);process.stdin.pause();resolve(JSON.parse(input.trim()));}})});
-globalThis.__zenpayEnv=config;
+Object.assign(process.env, config);
 const originalFetch=globalThis.fetch;
 let providerCalls=0,providerStatus='pending',cashoutCalls=0;
 const payments=new Map();

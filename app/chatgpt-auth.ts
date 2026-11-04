@@ -1,5 +1,11 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+
+import { readSession, sessionCookie } from "../lib/seller-session";
+
+export function usesGoogleAuth() {
+  return process.env.VERCEL === "1" || Boolean(process.env.GOOGLE_CLIENT_ID);
+}
 
 export type ChatGPTUser = {
   userId: string;
@@ -19,6 +25,7 @@ const SIGN_OUT_PATH = "/signout-with-chatgpt";
 const CALLBACK_PATH = "/callback";
 
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
+  if (usesGoogleAuth()) return readSession((await cookies()).get(sessionCookie)?.value);
   const requestHeaders = await headers();
   const userId = requestHeaders.get(USER_ID_HEADER);
   const email = requestHeaders.get(USER_EMAIL_HEADER);
