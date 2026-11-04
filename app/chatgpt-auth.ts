@@ -1,10 +1,11 @@
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { readSession, sessionCookie } from "../lib/seller-session";
+import { getNeonAuth } from "../lib/neon-auth";
+import { sql } from "../lib/db";
 
-export function usesGoogleAuth() {
-  return process.env.VERCEL === "1" || Boolean(process.env.GOOGLE_CLIENT_ID);
+export function usesNeonAuth() {
+  return process.env.VERCEL === "1" || Boolean(process.env.NEON_AUTH_BASE_URL);
 }
 
 export type ChatGPTUser = {
@@ -25,7 +26,26 @@ const SIGN_OUT_PATH = "/signout-with-chatgpt";
 const CALLBACK_PATH = "/callback";
 
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
-  if (usesGoogleAuth()) return readSession((await cookies()).get(sessionCookie)?.value);
+  if (usesNeonAuth()) {
+    const auth = getNeonAuth();
+    if (!auth) return null;
+    const { data } = await auth.getSession();
+    const user = data?.user;
+    if (!user) return null;
+    const identity = 'neon:' + user.id;
+    const [linked] = await sql('SELECT id FROM zenpay_sellers WHERE neon_identity=$1 OR id=$1 LIMIT 1', [identity]);
+    let userId = linked?.id ?? identity;
+    if (!linked) {
+      const candidates = await sql('SELECT id FROM zenpay_sellers WHERE lower(email)=lower($1) AND neon_identity IS NULL LIMIT 2', [user.email]);
+      if (candidates.length > 1 || (candidates.length === 1 && !user.emailVerified)) return null;
+      if (candidates.length === 1) {
+        const [claimed] = await sql('UPDATE zenpay_sellers SET neon_identity=$1 WHERE id=$2 AND (neon_identity IS NULL OR neon_identity=$1) RETURNING id', [identity, candidates[0].id]);
+        if (!claimed) return null;
+        userId = claimed.id;
+      }
+    }
+    return { userId, email: user.email, displayName: user.name || user.email, fullName: user.name || null };
+  }
   const requestHeaders = await headers();
   const userId = requestHeaders.get(USER_ID_HEADER);
   const email = requestHeaders.get(USER_EMAIL_HEADER);

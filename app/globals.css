@@ -13,3 +13,7 @@
 
 .checkout-delivery-notice { margin: 1rem 0; padding: .875rem 1rem; border: 1px solid #bfdbfe; border-radius: .75rem; background: #eff6ff; color: #1e3a8a; text-align: left; }
 .checkout-delivery-notice p { margin: .25rem 0 0; font-size: .875rem; }
+
+.neon-login { display: grid; gap: .75rem; max-width: 24rem; margin: 1rem 0; }
+.neon-login label { display: grid; gap: .25rem; }
+.neon-login input { width: 100%; }

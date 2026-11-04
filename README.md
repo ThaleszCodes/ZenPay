@@ -51,9 +51,9 @@ Em Configurações, copie a URL do webhook, cadastre-a na PAGGPAY no mesmo ambie
 
 ### Deploy na Vercel
 
-Use o preset Next.js e deixe Output Directory sem override. O `vercel.json` seleciona o build nativo do Next.js.
-Configure `DATABASE_URL`, a `ENCRYPTION_KEY` existente e `ZENPAY_ORIGIN` com o domínio público HTTPS.
-Crie um cliente OAuth do tipo aplicativo web no Google Cloud. Autorize o redirecionamento
-`https://SEU-DOMINIO/api/auth/callback` e configure `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`.
-Defina `ZENPAY_SESSION_SECRET` com um segredo aleatório de pelo menos 32 caracteres.
-O vendedor deve entrar com o mesmo e-mail verificado para recuperar uma loja existente.
+Use o preset Next.js e deixe Output Directory sem override.
+Configure DATABASE_URL, a ENCRYPTION_KEY existente, NEON_AUTH_BASE_URL e
+NEON_AUTH_COOKIE_SECRET (gere com openssl rand -hex 32).
+Cadastre o domínio público em Neon Auth → Settings → Trusted domains.
+Aplique db/migrations/002_neon_identity.sql em bancos existentes.
+Para recuperar uma loja, cadastre e confirme o mesmo e-mail usado antes.
