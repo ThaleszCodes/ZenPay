@@ -13,8 +13,9 @@ async function seller(){const user=await getChatGPTUser();if(!user)fail('Entre n
 async function credential(s:any){if(!s.api_key_encrypted)fail('Conecte sua chave PAGGPAY nas configurações.');return decrypt(s.api_key_encrypted);}
 async function orderAuth(id:string,req:Request){uuid.parse(id);const token=req.headers.get('X-Order-Token')||new URL(req.url).searchParams.get('token');if(!token||token.length>100)fail('Acesso à compra inválido.',403);const [o]=await sql('SELECT * FROM zenpay_orders WHERE id=$1 AND access_hash=$2',[id,await hash(token)]);if(!o)fail('Compra não encontrada.',404);return o;}
 function publicOrder(o:any){return {id:o.id,status:o.status,amount:o.amount,product_name:o.product_name,pix_code:o.pix_code,pix_qr:o.pix_qr,expires_at:o.expires_at,created_at:o.created_at,paid_at:o.paid_at};}
-async function syncOrder(o:any,force=false){
- if(!o.provider_id){
+async function syncOrder(o:any,force=false,webhookProviderId?:string){
+ const binding=!o.provider_id&&webhookProviderId;
+ if(!o.provider_id&&!binding){
   if(!['verification_required','creation_failed'].includes(o.status))return o;
   if(!force&&o.checked_at&&Date.now()-Date.parse(o.checked_at)<6000)return o;
   await sql('UPDATE zenpay_orders SET checked_at=now() WHERE id=$1 AND provider_id IS NULL',[o.id]);
@@ -44,7 +45,7 @@ async function syncOrder(o:any,force=false){
   o=updated;
   force=true;
  }
- if(!force&&o.checked_at&&Date.now()-Date.parse(o.checked_at)<6000)return o;const data=await pagg(await decrypt(o.credential_encrypted),o.environment,'/pix/'+encodeURIComponent(o.provider_id));const tid=data?.transaction?.id;if(tid!==o.provider_id)fail('Pagamento não corresponde ao pedido.',502);if(data.pix?.value!=null&&Number(data.pix.value)!==o.amount)fail('Valor do pagamento não corresponde ao pedido.',502);const status=paymentStatus(data);const [updated]=await sql(`UPDATE zenpay_orders SET status=$2,paid_at=CASE WHEN $2='paid' THEN COALESCE(paid_at,now()) ELSE paid_at END,checked_at=now(),pix_code=COALESCE($3,pix_code),pix_qr=COALESCE($4,pix_qr),expires_at=COALESCE($5,expires_at) WHERE id=$1 RETURNING *`,[o.id,status,data.pix?.code||null,data.pix?.qrcode||null,data.pix?.expiration_date||null]);return updated;}
+ if(!force&&o.checked_at&&Date.now()-Date.parse(o.checked_at)<6000)return o;const data=await pagg(await decrypt(o.credential_encrypted),o.environment,'/pix/'+encodeURIComponent(o.provider_id||binding));const tid=data?.transaction?.id;if(tid!==(o.provider_id||binding))fail('Pagamento não corresponde ao pedido.',502);if(data.pix?.value!=null&&Number(data.pix.value)!==o.amount)fail('Valor do pagamento não corresponde ao pedido.',502);if(binding&&(data.transaction.reference_id??data.pix?.reference_id)!==o.id)fail('Referência da cobrança não corresponde ao pedido.',409);const status=paymentStatus(data);const [updated]=await sql(`UPDATE zenpay_orders SET status=$2,paid_at=CASE WHEN $2='paid' THEN COALESCE(paid_at,now()) ELSE paid_at END,checked_at=now(),pix_code=COALESCE($3,pix_code),pix_qr=COALESCE($4,pix_qr),expires_at=COALESCE($5,expires_at),provider_id=COALESCE(provider_id,$6) WHERE id=$1 AND (provider_id IS NULL OR provider_id=$6) RETURNING *`,[o.id,status,data.pix?.code||null,data.pix?.qrcode||null,data.pix?.expiration_date||null,tid]);if(!updated)fail('Pedido vinculado a outra transação.',409);return updated;}
 async function handle(req:Request){
  const url=new URL(req.url);const p=url.pathname.split('/').filter(Boolean).slice(1);const action=p[0], id=p[1];
  if(!['GET','HEAD'].includes(req.method)&&!['webhooks','seller-webhooks'].includes(action)){const origin=req.headers.get('Origin');if(origin&&origin!==url.origin)fail('Origem não permitida.',403);}
@@ -62,10 +63,10 @@ async function handle(req:Request){
   if(!o){const [prior]=await sql('SELECT * FROM zenpay_orders WHERE request_key=$1',[b.request_key]);if(prior?.access_hash!==await hash(b.token))fail('Pedido inválido.',403);return response(publicOrder(prior));}
   try{const d=await pagg(await decrypt(p.api_key_encrypted),p.environment,'/pix','POST',{value:p.price,reference_id:oid,payer_name:b.name,payer_email:b.email,payer_phone:b.phone,description:p.name,payer_pays_fee:false,...(!p.webhook_secret_encrypted?{webhook_url:url.origin+'/api/webhooks/'+oid}:{})},p.webhook_secret_encrypted?{}:{'X-Paggpay-Webhook-Secret':await callbackSecret(oid)});
    if(!d?.transaction?.id)throw new PaymentError('A PAGGPAY não identificou a cobrança. Peça ao vendedor para conferi-la antes de tentar novamente.',503);
-   const [updated]=await sql(`UPDATE zenpay_orders SET provider_id=$2,status='pending',pix_code=$3,pix_qr=$4,expires_at=$5 WHERE id=$1 RETURNING *`,[oid,d.transaction.id,d.pix?.code||null,d.pix?.qrcode||null,d.pix?.expiration_date||null]);return response(publicOrder(updated),201);
+   const [updated]=await sql(`UPDATE zenpay_orders SET provider_id=$2,status=CASE WHEN provider_id IS NULL THEN 'pending' ELSE status END,pix_code=COALESCE($3,pix_code),pix_qr=COALESCE($4,pix_qr),expires_at=COALESCE($5,expires_at) WHERE id=$1 AND (provider_id IS NULL OR provider_id=$2) RETURNING *`,[oid,d.transaction.id,d.pix?.code||null,d.pix?.qrcode||null,d.pix?.expiration_date||null]);if(!updated)fail('Pedido vinculado a outra transação.',409);return response(publicOrder(updated),201);
   }catch(e){
    const uncertain=[502,503].includes((e as any).status);
-   const [updated]=await sql('UPDATE zenpay_orders SET status=$2 WHERE id=$1 RETURNING *',[oid,uncertain?'verification_required':'creation_failed']);
+   const [updated]=await sql('UPDATE zenpay_orders SET status=CASE WHEN provider_id IS NULL THEN $2 ELSE status END WHERE id=$1 RETURNING *',[oid,uncertain?'verification_required':'creation_failed']);
    if(uncertain)return response(publicOrder(updated),202);
    throw e;
   }
@@ -90,10 +91,13 @@ async function handle(req:Request){
   if(!reference.success&&!providerId)return response({received:true});
   const [order]=await sql('SELECT * FROM zenpay_orders WHERE seller_id=$1 AND (id=$2::uuid OR provider_id=$3) ORDER BY (provider_id=$3) DESC NULLS LAST LIMIT 1',[owner.id,reference.success?reference.data:null,providerId]);
   if(!order)return response({received:true});
-  if(!order.provider_id)fail('Pedido ainda em processamento.',409);
+  if(!order.provider_id&&(
+   !providerId?.startsWith('txn_')||!reference.success||reference.data!==order.id||
+   event.data?.amount!==order.amount||event.data?.currency_code!=='BRL'||event.data?.payment_method_type!=='pix'
+  ))fail('Pedido ainda em processamento.',409);
   const [seen]=await sql('SELECT id FROM zenpay_events WHERE id=$1 AND order_id=$2',[event.id,order.id]);
   if(seen)return response({received:true});
-  await syncOrder(order,true);
+  await syncOrder(order,true,providerId??undefined);
   await sql('INSERT INTO zenpay_events(id,order_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[event.id,order.id]);
   return response({received:true});
  }
