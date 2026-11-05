@@ -44,3 +44,15 @@
   }
 }
 @media (prefers-reduced-motion:reduce) { .screen button,.filters summary { transition:none; } }
+
+@media (max-width:620px) {
+  .periods { background: #f3f6fc; box-shadow: var(--finish-recess); }
+  .periods button[aria-pressed=true] { box-shadow: var(--finish-sheen), 0 1px 2px rgb(20 34 67 / 9%); }
+  .card, .transactions button { box-shadow: var(--finish-surface); }
+  .card {
+    background-image: radial-gradient(ellipse at 100% 0%, #f1f6ff, transparent 58%);
+  }
+  .counts { border-image: var(--finish-divider) 1; }
+  .counts, .transactionCopy > span { font-variant-numeric: tabular-nums; }
+  .badge { box-shadow: var(--finish-sheen); }
+}
