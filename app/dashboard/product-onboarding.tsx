@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, Package, X } from 'lucide-react';
 import { api, copy, money } from '../../lib/client';
+import MagneticAction from './magnetic-action';
+import OnboardingScene from './onboarding-scene';
 import { useLayoutMotion } from './use-layout-motion';
 import styles from './product-onboarding.module.css';
 
@@ -53,7 +55,10 @@ export default function ProductOnboarding({ sellerId, connected, sandbox, onClos
       if (stored) {
         const data = JSON.parse(stored);
         setDraft({ ...initial, ...data.draft });
-        setStep(data.hadFile && data.step === 3 ? 2 : data.step);
+        const storedStep = Number.isInteger(data.step) && data.step >= 0 && data.step < steps.length ? data.step : 0;
+        const resumedStep = data.hadFile && storedStep === 3 ? 2 : storedStep;
+        setStep(resumedStep);
+        setPreview(resumedStep === 2 ? 'delivery' : 'checkout');
         setMissingFile(!!data.hadFile);
         setSaved(true);
       }
@@ -222,11 +227,13 @@ export default function ProductOnboarding({ sellerId, connected, sandbox, onClos
         {error && <div className="alert error" role="alert">{error}</div>}
         <div ref={footerMotion.element} className={styles.actions}>
           {step > 0 && <button className="button" type="button" disabled={busy} onClick={() => go(step - 1)}><ArrowLeft size={16}/>Voltar</button>}
-          <button className="button primary" disabled={busy || !sellerId} type="submit">{busy ? 'Criando produto…' : step === 3 ? 'Criar produto' : 'Continuar'}{!busy && <ArrowRight size={16}/>}</button>
+          <MagneticAction><button className="button primary" disabled={busy || !sellerId} type="submit">{busy ? 'Criando produto…' : step === 3 ? 'Criar produto' : 'Continuar'}{!busy && <ArrowRight size={16}/>}</button></MagneticAction>
         </div>
         <small className={styles.draft} role="status">{saved ? 'Rascunho salvo neste dispositivo.' : 'O rascunho é salvo neste dispositivo quando disponível.'}{file && ' Reanexe o arquivo se sair.'}</small>
       </form>
-      <aside className={styles.card} aria-label="Prévia para o comprador">
+      <aside className={styles.story} aria-label="Prévia para o comprador">
+        <OnboardingScene step={step}/>
+        <div className={styles.card}>
         <div className={styles.previewControls} aria-label="Escolher prévia">
           <button type="button" aria-pressed={preview === 'checkout'} onClick={() => setPreview('checkout')}>Checkout</button>
           <button type="button" aria-pressed={preview === 'delivery'} onClick={() => setPreview('delivery')}>Pós-pagamento</button>
@@ -246,6 +253,7 @@ export default function ProductOnboarding({ sellerId, connected, sandbox, onClos
             {draft.delivery_url.trim() && <span className={styles.pix}>Acessar produto</span>}
             {file && <p>Baixar {file.name}</p>}
           </>}
+        </div>
         </div>
       </aside>
     </div>

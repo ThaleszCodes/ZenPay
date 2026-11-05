@@ -197,3 +197,104 @@
   .steps li[aria-current] span { scale: 1.08; }
   .progress span { transition: transform 440ms var(--zen-spring); }
 }
+
+.story {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.scene {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 152px;
+  display: grid;
+  align-items: end;
+  padding: 22px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #101329, #202955);
+  color: #f4f5ff;
+}
+
+.sceneDepth {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: repeating-linear-gradient(120deg, transparent 0 15px, rgb(171 182 255 / 7%) 16px 17px);
+  pointer-events: none;
+}
+
+.sceneOrbit {
+  position: absolute;
+  width: 190px;
+  aspect-ratio: 1;
+  right: -40px;
+  top: -72px;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, transparent 0 13px, rgb(192 204 255 / 25%) 14px 15px);
+  mask-image: radial-gradient(black, transparent 73%);
+}
+
+.sceneEmblem {
+  position: absolute;
+  top: 18px;
+  right: 23px;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  aspect-ratio: 1;
+  border: 1px solid #8798e7;
+  border-radius: 16px;
+  background: #2f3972;
+  color: #dce2ff;
+  box-shadow: 0 14px 22px rgb(7 9 25 / 38%);
+}
+
+.sceneCopy { max-width: calc(100% - 52px); }
+.sceneCopy small { color: #bac6ff; font-size: .7rem; font-weight: 750; letter-spacing: .12em; }
+.sceneCopy h2 { margin: 5px 0; font-size: 1.15rem; line-height: 1.2; }
+.sceneCopy p { margin: 0; color: #d6ddfa; font-size: .83rem; line-height: 1.45; }
+
+@media (min-width: 780px) and (min-height: 800px) {
+  .story { position: sticky; top: 24px; }
+}
+
+@keyframes story-depth {
+  from { transform: perspective(460px) translate3d(0, 18px, 0) rotateX(10deg) scale(1.06); }
+  to { transform: perspective(460px) translate3d(0, -12px, 0) rotateX(-5deg) scale(1.06); }
+}
+@keyframes story-emblem {
+  from { transform: perspective(360px) translate3d(4px, 12px, 0) rotateY(-14deg) rotateZ(7deg); }
+  to { transform: perspective(360px) translate3d(0, -5px, 0) rotateY(5deg) rotateZ(-4deg); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sceneCopy { animation: var(--zen-enter) 440ms var(--zen-brake) backwards; }
+
+  @supports (animation-timeline: view()) and (animation-range: entry 0% cover 65%) {
+    .scene { view-timeline: --chapter block; }
+    .sceneDepth, .sceneEmblem {
+      animation: story-depth linear both;
+      animation-timeline: --chapter;
+      animation-range: entry 0% cover 65%;
+    }
+    .sceneEmblem { animation-name: story-emblem; }
+  }
+}
+
+@keyframes story-preview {
+  from { transform: perspective(900px) translate3d(0, 12px, 0) rotateX(4deg); opacity: .88; }
+  to { transform: perspective(900px) translate3d(0, 0, 0) rotateX(0deg); opacity: 1; }
+}
+
+@supports (animation-timeline: view()) and (animation-range: entry 0% entry 80%) {
+  @media (max-width: 779px) and (prefers-reduced-motion: no-preference) {
+    .story > .card:not(:focus-within) {
+      transform-origin: center top;
+      animation: story-preview linear both;
+      animation-timeline: view(block);
+      animation-range: entry 0% entry 80%;
+    }
+  }
+}
