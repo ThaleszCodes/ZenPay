@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, Package, X } from 'lucide-react';
 import { api, copy, money } from '../../lib/client';
+import { useLayoutMotion } from './use-layout-motion';
 import styles from './product-onboarding.module.css';
 
 const steps = ['Produto', 'Preço', 'Entrega', 'Revisão'];
@@ -30,6 +31,8 @@ type Props = {
 export default function ProductOnboarding({ sellerId, connected, sandbox, onClose, onCreated }: Props) {
   const [draft, setDraft] = useState(initial);
   const [step, setStep] = useState(0);
+  const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
+  const footerMotion = useLayoutMotion(step);
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -76,6 +79,8 @@ export default function ProductOnboarding({ sellerId, connected, sandbox, onClos
   }
 
   function go(next: number) {
+    footerMotion.capture();
+    setDirection(next > step ? 'forward' : 'backward');
     setStep(next);
     setPreview(next === 2 ? 'delivery' : 'checkout');
     setError('');
@@ -161,14 +166,16 @@ export default function ProductOnboarding({ sellerId, connected, sandbox, onClos
       <span className="brand"><span className="brandmark">Z</span>zenpay<span className="branddot">.</span></span>
       <button className="button" type="button" onClick={onClose} disabled={busy}><X size={16}/>Sair</button>
     </header>
-    <progress className={styles.progress} value={step + 1} max={4} aria-label="Progresso da criação"/>
+    <div className={styles.progress} role="progressbar" aria-label="Progresso da criação" aria-valuemin={0} aria-valuemax={4} aria-valuenow={step + 1} aria-valuetext={`Etapa ${step + 1} de 4`}>
+      <span style={{ '--completion': (step + 1) / 4 } as CSSProperties}/>
+    </div>
     <ol className={styles.steps} aria-label="Etapas de criação">
       {steps.map((label, index) => <li key={label} aria-current={index === step ? 'step' : undefined}>
         <span>{index < step ? <Check size={15}/> : index + 1}</span>{label}
       </li>)}
     </ol>
     <div className={styles.layout}>
-      <form className={styles.card} onSubmit={submit} noValidate>
+      <form className={styles.card} data-direction={direction} onSubmit={submit} noValidate>
         <div key={step} className={styles.intro}>
           <small>ETAPA {step + 1} DE {steps.length}</small>
           <h1 ref={heading} tabIndex={-1}>{titles[step]}</h1>
@@ -213,7 +220,7 @@ export default function ProductOnboarding({ sellerId, connected, sandbox, onClos
           </>}
         </fieldset>
         {error && <div className="alert error" role="alert">{error}</div>}
-        <div className={styles.actions}>
+        <div ref={footerMotion.element} className={styles.actions}>
           {step > 0 && <button className="button" type="button" disabled={busy} onClick={() => go(step - 1)}><ArrowLeft size={16}/>Voltar</button>}
           <button className="button primary" disabled={busy || !sellerId} type="submit">{busy ? 'Criando produto…' : step === 3 ? 'Criar produto' : 'Continuar'}{!busy && <ArrowRight size={16}/>}</button>
         </div>

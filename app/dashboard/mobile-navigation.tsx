@@ -1,5 +1,5 @@
 import { BarChart3, Grid2X2, Home, Layers3, Settings2, Wallet } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import styles from './mobile.module.css';
 
 export type DashboardTab = 'home' | 'sales' | 'products' | 'finance' | 'more';
@@ -25,10 +25,13 @@ export function MobileHeader({ name, onProfile, onHome }: { name?: string; onPro
 }
 
 export function MobileNavigation({ tab, onChange }: { tab: DashboardTab; onChange: (tab: DashboardTab) => void }) {
+  const activeTab = tab === 'finance' ? 'more' : tab;
+  const activeIndex = tabs.findIndex(item => item.id === activeTab);
   return (
     <nav className={styles.navigation} aria-label="Navegação do painel">
+      <span className={styles.navigationTrack} aria-hidden="true"><span style={{ '--active-tab': activeIndex } as CSSProperties}/></span>
       {tabs.map(({ id, label, icon: Icon }) => {
-        const active = id === tab || (id === 'more' && tab === 'finance');
+        const active = id === activeTab;
         return <button key={id} type="button" aria-current={active ? 'page' : undefined} onClick={() => onChange(id)}><Icon size={20} aria-hidden /><span>{label}</span></button>;
       })}
     </nav>

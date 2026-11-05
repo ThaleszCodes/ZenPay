@@ -57,3 +57,36 @@
   .more { gap:14px; }
   .more button,.more a { display:flex; align-items:center; gap:9px; padding:13px; border-radius:12px; background:#fff; color:#15151a; }
 }
+
+.navigationTrack { display: none; }
+
+@media (max-width: 620px) {
+  .navigationTrack {
+    position: absolute;
+    inset: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+    display: block;
+    pointer-events: none;
+  }
+  .navigationTrack > span {
+    display: block;
+    width: calc((100% - 12px) / 4);
+    height: 100%;
+    border-radius: 28px;
+    background: #e0e8ff;
+    transform: translate3d(calc((100% + 4px) * var(--active-tab)), 0, 0);
+  }
+  .navigation button { position: relative; min-width: 0; }
+  .navigation button[aria-current] { background: transparent; }
+}
+
+@media (max-width: 620px) and (prefers-reduced-motion: no-preference) {
+  .navigationTrack > span { transition: transform 440ms var(--zen-spring); }
+  .navigation button svg { transition: transform 380ms var(--zen-spring-pop); }
+  .navigation button[aria-current] svg { transform: translate3d(0, -1px, 0); }
+}
+
+@media (max-width: 620px) and (prefers-reduced-motion: no-preference) {
+  .activityList > li { animation: zen-enter 340ms var(--zen-brake) backwards; }
+  .activityList > li:nth-child(2) { animation-delay: 32ms; }
+  .activityList > li:nth-child(3) { animation-delay: 64ms; }
+}
