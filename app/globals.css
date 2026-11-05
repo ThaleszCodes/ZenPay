@@ -32,6 +32,7 @@
 :root {
   --zen-spring: cubic-bezier(.18, .8, .28, 1);
   --zen-spring-pop: cubic-bezier(.2, .8, .25, 1.15);
+  --zen-enter: zen-enter;
   --zen-brake: cubic-bezier(.15, .65, .24, 1);
 }
 @supports (animation-timing-function: linear(0, 1)) {

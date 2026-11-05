@@ -189,7 +189,7 @@
   .fields > :nth-child(2) { animation-delay: 30ms; }
   .fields > :nth-child(3) { animation-delay: 60ms; }
   .fields > :nth-child(n+4) { animation-delay: 90ms; }
-  .preview, .success { animation: zen-enter 420ms var(--zen-spring) backwards; }
+  .preview, .success { animation: var(--zen-enter) 420ms var(--zen-spring) backwards; }
   .success .badge { animation: confirm 460ms var(--zen-spring-pop) backwards; }
   .steps li, .steps li span {
     transition: background-color 160ms ease, color 160ms ease, scale 420ms var(--zen-spring-pop);
