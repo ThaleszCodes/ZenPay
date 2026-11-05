@@ -27,3 +27,32 @@
   }
   .dashboard-home .dashboard-existing,.dashboard-sales .dashboard-existing,.dashboard-more .dashboard-existing { display:none; }
 }
+
+/* Motion uses composited properties and leaves layout stable. */
+@keyframes zen-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes zen-overlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :where(button, a.button, .icon-button, input, textarea, select) {
+    transition: background-color 180ms ease, border-color 180ms ease,
+      box-shadow 180ms ease, color 180ms ease, transform 180ms ease;
+  }
+  :where(button, a.button):not(:disabled):active { transform: scale(.98); }
+  .main-content, .checkout-card, .delivery-card { animation: zen-enter 320ms ease-out both; }
+  .modal-backdrop { animation: zen-overlay 180ms ease-out both; }
+  .modal { animation: zen-enter 240ms ease-out both; }
+  .alert, .toast { animation: zen-enter 220ms ease-out both; }
+  .product-card { animation: zen-enter 300ms ease-out both; }
+}
+:where(button, a, input, textarea, select):focus-visible {
+  outline: 2px solid #515bda;
+  outline-offset: 3px;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .button:not(:disabled):hover { transform: translateY(-1px); }
+}

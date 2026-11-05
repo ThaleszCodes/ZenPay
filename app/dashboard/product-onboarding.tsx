@@ -161,6 +161,7 @@ export default function ProductOnboarding({ sellerId, connected, sandbox, onClos
       <span className="brand"><span className="brandmark">Z</span>zenpay<span className="branddot">.</span></span>
       <button className="button" type="button" onClick={onClose} disabled={busy}><X size={16}/>Sair</button>
     </header>
+    <progress className={styles.progress} value={step + 1} max={4} aria-label="Progresso da criação"/>
     <ol className={styles.steps} aria-label="Etapas de criação">
       {steps.map((label, index) => <li key={label} aria-current={index === step ? 'step' : undefined}>
         <span>{index < step ? <Check size={15}/> : index + 1}</span>{label}
@@ -168,11 +169,11 @@ export default function ProductOnboarding({ sellerId, connected, sandbox, onClos
     </ol>
     <div className={styles.layout}>
       <form className={styles.card} onSubmit={submit} noValidate>
-        <div className={styles.intro}>
+        <div key={step} className={styles.intro}>
           <small>ETAPA {step + 1} DE {steps.length}</small>
           <h1 ref={heading} tabIndex={-1}>{titles[step]}</h1>
         </div>
-        <fieldset disabled={busy || !sellerId} className={styles.fields}>
+        <fieldset key={step} disabled={busy || !sellerId} className={styles.fields}>
           {step === 0 && <>
             <label>Nome do produto<input required maxLength={160} value={draft.name} onChange={e => update('name', e.target.value)} placeholder="Ex.: Kit de templates para Instagram"/></label>
             <label>Descrição <small>Opcional</small><textarea rows={4} maxLength={3000} value={draft.description} onChange={e => update('description', e.target.value)} placeholder="Conte o que o comprador vai receber."/></label>
@@ -223,7 +224,7 @@ export default function ProductOnboarding({ sellerId, connected, sandbox, onClos
           <button type="button" aria-pressed={preview === 'checkout'} onClick={() => setPreview('checkout')}>Checkout</button>
           <button type="button" aria-pressed={preview === 'delivery'} onClick={() => setPreview('delivery')}>Pós-pagamento</button>
         </div>
-        <div className={styles.preview}>
+        <div key={preview} className={styles.preview}>
           <small>PRÉVIA SIMULADA</small>
           {preview === 'checkout' ? <>
             <div className={styles.cover}>{isHttps(draft.cover_url.trim()) && draft.cover_url.trim() ? <img src={draft.cover_url.trim()} alt="Capa do produto" referrerPolicy="no-referrer"/> : <Package size={32}/>}</div>
