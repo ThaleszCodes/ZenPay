@@ -181,11 +181,11 @@ export default function ProductOnboarding({ sellerId, connected, sandbox, onClos
     </ol>
     <div className={styles.layout}>
       <form className={styles.card} data-direction={direction} onSubmit={submit} noValidate>
-        <div key={step} className={styles.intro}>
+        <div key={`intro-${step}`} className={styles.intro}>
           <small>ETAPA {step + 1} DE {steps.length}</small>
           <h1 ref={heading} tabIndex={-1}>{titles[step]}</h1>
         </div>
-        <fieldset key={step} disabled={busy || !sellerId} className={styles.fields}>
+        <fieldset key={`fields-${step}`} disabled={busy || !sellerId} className={styles.fields}>
           {step === 0 && <>
             <label>Nome do produto<input required maxLength={160} value={draft.name} onChange={e => update('name', e.target.value)} placeholder="Ex.: Kit de templates para Instagram"/></label>
             <label>Descrição <small>Opcional</small><textarea rows={4} maxLength={3000} value={draft.description} onChange={e => update('description', e.target.value)} placeholder="Conte o que o comprador vai receber."/></label>

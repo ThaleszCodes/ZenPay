@@ -150,3 +150,11 @@
 :is(.checkout-benefits, .checkout-consent, .order-id, .delivery-foot, .pix-code, .waiting, .delivery-instructions) {
   color: var(--finish-ink);
 }
+
+.checkout-page :is(.seller-label, .product-description, .checkout-header > span,
+.checkout-price small, .checkout-price > span, .checkout-total > span,
+.steps > small, .steps > span:not(.done), .form-help, .checkout-powered, .checkout-powered strong) {
+  color: var(--finish-ink);
+}
+
+.checkout-powered { margin-top: 10px; }
