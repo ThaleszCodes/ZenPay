@@ -25,5 +25,5 @@
   .dashboard-shell .main-content {
     padding:0 clamp(18px, 6.15vw, 30px) calc(86px + env(safe-area-inset-bottom, 0px));
   }
-  .dashboard-home .dashboard-existing,.dashboard-more .dashboard-existing { display:none; }
+  .dashboard-home .dashboard-existing,.dashboard-sales .dashboard-existing,.dashboard-more .dashboard-existing { display:none; }
 }
